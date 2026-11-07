@@ -1,1 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>公告创建器</title>
+  <style>
+    /* ==================== iOS 风格皮肤 ==================== */
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; background-color: #F2F2F7; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif; color: #000; overflow: hidden; display: flex; flex-direction: column; }
+    
+    #editor-tabbar { flex-shrink: 0; display: flex; overflow-x: auto; background: rgba(249, 249, 249, 0.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding-top: env(safe-area-inset-top, 0px); min-height: 44px; border-bottom: 0.5px solid #C6C6C8; align-items: center; scrollbar-width: none; }
+    #editor-tabbar::-webkit-scrollbar { display: none; }
+    .editor-tab { flex-shrink: 0; padding: 12px 18px; font-size: 15px; color: #8E8E93; cursor: pointer; position: relative; transition: color 0.2s; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .editor-tab.active { color: #007AFF; font-weight: 600; }
+    .editor-tab-close { background: #E5E5EA; color: #8E8E93; border-radius: 50%; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; line-height: 1; margin-left: 4px; }
+    .editor-tab.main .editor-tab-close { display: none; }
 
+    #editor-content { flex: 1; overflow: hidden; padding: 12px; position: relative; }
+    .editor-page { position: absolute; inset: 0; padding: 12px; overflow-y: auto; display: none; -webkit-overflow-scrolling: touch; }
+    .editor-page.active { display: flex; flex-direction: column; }
+    
+    .editor-layout-split { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 12px; width: 100%; height: 100%; }
+    @media (min-width: 900px) { .editor-layout-split { flex-direction: row; } }
+    @media (max-width: 899px) { .editor-layout-split { flex-direction: column; } }
+
+    .main-edit-area, .main-output-area, .column-settings, .column-subtitle-section, .subtitle-name-section, .subtitle-richtext-section, .subtitle-editor-section { 
+      background: #FFFFFF; border-radius: 12px; padding: 16px; border: none; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; min-height: 0; 
+    }
+    .main-edit-area { flex: 1.1; overflow: hidden; }
+    .main-output-area { flex: 0.9; overflow: hidden; }
+    .column-page { display: flex; flex-direction: column; gap: 12px; height: 100%; width: 100%; overflow: auto; }
+
+    .editor-section-title { font-size: 13px; font-weight: 600; color: #8E8E93; margin-bottom: 12px; letter-spacing: 0.5px; margin-top: 8px; }
+    .editor-section-title:first-child { margin-top: 0; }
+
+    .editor-btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; flex-shrink: 0; }
+    .editor-btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; flex-shrink: 0; }
+    .editor-btn { 
+      display: inline-flex; justify-content: center; align-items: center; padding: 8px 16px; border-radius: 10px; 
+      border: none; font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity 0.2s, transform 0.1s; 
+      background: #E5E5EA; color: #000; 
+    }
+    .editor-btn:active { opacity: 0.6; transform: scale(0.98); }
+    .editor-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .editor-btn-primary { background: #007AFF; color: #FFF; }
+    .editor-btn-danger { background: #FF3B30; color: #FFF; }
+
+    .main-column-list, .column-subtitle-list { flex: 1; overflow-y: auto; min-height: 0; margin: 0 -16px; padding: 0 16px; }
+    .editor-list-item { 
+      background: #FFFFFF; padding: 12px 16px; border-radius: 10px; margin-bottom: 8px; 
+      display: flex; justify-content: space-between; align-items: center; cursor: pointer; 
+      border: none; transition: background 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .editor-list-item:hover { background: #F9F9F9; }
+    .editor-list-item.selected { background: #EBF5FF; box-shadow: 0 0 0 1px #007AFF; }
+    .editor-list-item.selected .editor-list-item-name { color: #007AFF; font-weight: 600; }
+    
+    .editor-list-item-info { flex: 1; overflow: hidden; }
+    .editor-list-item-name { font-size: 16px; font-weight: 500; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .editor-list-item-meta { font-size: 13px; color: #8E8E93; margin-top: 4px; }
+
+    .editor-form-row { margin-bottom: 16px; }
+    .editor-form-row label { display: block; font-size: 13px; color: #8E8E93; margin-bottom: 8px; margin-left: 4px; }
+    .editor-input, .editor-select, .editor-textarea { 
+      width: 100%; background: #F2F2F7; border: none; border-radius: 10px; padding: 12px 14px; 
+      font-size: 15px; color: #000; outline: none; -webkit-appearance: none; transition: background 0.2s; font-family: inherit; 
+    }
+    .editor-input:focus, .editor-select:focus, .editor-textarea:focus { background: #E5E5EA; }
+    .editor-textarea { min-height: 120px; resize: vertical; font-family: "SF Mono", Consolas, monospace; font-size: 14px; line-height: 1.5; }
+
+    .main-empty-hint, .column-empty-hint { text-align: center; color: #8E8E93; padding: 30px 0; font-size: 14px; }
+
+    .richtext-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
+    .richtext-card { background: #FFFFFF; border-radius: 10px; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); cursor: pointer; transition: all 0.2s; border: 1px solid #E5E5EA; }
+    .richtext-card.checked { border-color: #007AFF; background: #F2F7FF; }
+    .richtext-card.disabled { opacity: 0.4; pointer-events: none; }
+    .richtext-card-top { display: flex; align-items: center; gap: 8px; }
+    .richtext-card-check { width: 18px; height: 18px; accent-color: #007AFF; }
+    .richtext-card-name { font-size: 15px; font-weight: 500; }
+    .richtext-card-params { font-size: 12px; color: #8E8E93; margin-top: 6px; }
+    .richtext-card-param-area { margin-top: 12px; display: none; }
+    .richtext-card.checked .richtext-card-param-area { display: block; }
+    .richtext-param-group { margin-bottom: 8px; }
+    .richtext-param-group label { font-size: 12px; color: #8E8E93; display: block; margin-bottom: 4px; }
+    .richtext-param-group input { width: 100%; padding: 6px 8px; border: none; border-radius: 6px; background: #E5E5EA; font-size: 13px; }
+
+    #editor-json-output { display: none; }
+    .custom-json-box { 
+      width: 100%; flex: 1; background: #1C1C1E; color: #30D158; font-family: "SF Mono", Menlo, Consolas, monospace; 
+      font-size: 13px; padding: 16px; border: none; border-radius: 12px; outline: none; resize: none; line-height: 1.5; 
+    }
+
+    /* 子标题页面特有：修复移动端无法滚动的问题 */
+    .subtitle-page { display: flex; gap: 12px; width: 100%; }
+    @media (min-width: 900px) {
+      .subtitle-page { flex-direction: row; height: 100%; }
+      .subtitle-side-col { width: 340px; flex-shrink: 0; height: 100%; overflow-y: auto; }
+      .subtitle-main-col { flex: 1; min-width: 0; height: 100%; overflow-y: auto; }
+    }
+    @media (max-width: 899px) {
+      .editor-page.active { display: block; } /* 移动端强制 block，避免 flex 嵌套导致卡死 */
+      .subtitle-page { flex-direction: column; padding-bottom: 120px; } /* 给底部留出防遮挡空隙 */
+      .subtitle-side-col { width: 100%; height: auto; }
+      .subtitle-main-col { width: 100%; height: auto; min-height: 400px; }
+    }
+    .subtitle-side-col { display: flex; flex-direction: column; gap: 12px; }
+    .subtitle-main-col { display: flex; flex-direction: column; }
+    .subtitle-textarea { width: 100%; flex: 1; min-height: 250px; font-family: monospace; font-size: 13px; padding: 12px; border: none; border-radius: 10px; resize: none; background: #F2F2F7; }
+    .subtitle-textarea:focus { background: #E5E5EA; }
+
+    .fake-select-trigger { width: 100%; padding: 12px 14px; background: #F2F2F7; border-radius: 10px; border: none; font-size: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 8px; transition: background 0.2s; }
+    .fake-select-trigger:hover { background: #E5E5EA; }
+    .fake-select-trigger i { font-style: normal; font-size: 12px; color: #8E8E93; }
+    .column-head-url-row { display: none; }
+    .column-head-url-row.is-visible { display: block; }
+    .column-head-preview { display: none; margin-top: 8px; }
+    .column-head-preview.is-visible { display: block; }
+    .column-head-preview img { max-width: 200px; max-height: 60px; border-radius: 8px; display: block; }
+
+    .my-modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 99999; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+    .my-modal-mask.show { opacity: 1; pointer-events: auto; }
+    .my-modal-box { background: #FFFFFF; width: 90%; max-width: 320px; border-radius: 14px; overflow: hidden; transform: scale(0.95); transition: transform 0.25s; }
+    .my-modal-mask.show .my-modal-box { transform: scale(1); }
+    .my-modal-title { font-size: 17px; font-weight: 600; text-align: center; padding: 20px 16px 8px; }
+    .my-modal-input { width: 90%; margin: 10px auto 20px; display: block; background: #F2F2F7; border: none; border-radius: 10px; padding: 12px; font-size: 16px; text-align: center; outline: none; }
+    .my-modal-btns { display: flex; border-top: 0.5px solid #C6C6C8; }
+    .my-modal-btn { flex: 1; padding: 16px 0; background: transparent; border: none; font-size: 17px; cursor: pointer; }
+    .my-modal-btn.cancel { color: #007AFF; border-right: 0.5px solid #C6C6C8; }
+    .my-modal-btn.confirm { color: #007AFF; font-weight: 600; }
+    .my-modal-btn:active { background: #F2F2F7; }
+
+    .custom-img-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; max-height: 60vh; overflow-y: auto; padding: 16px; }
+    .custom-img-item { border: 2px solid #E5E5EA; border-radius: 10px; padding: 6px; cursor: pointer; text-align: center; background: #FFF; transition: border-color 0.2s; }
+    .custom-img-item.active { border-color: #007AFF; }
+    .custom-img-item img { width: 100%; height: 60px; object-fit: cover; border-radius: 6px; display: block; }
+    .custom-img-item span { font-size: 12px; color: #333; display: block; margin-top: 6px; word-break: break-all; }
+
+    .editor-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #FFF; padding: 12px 24px; border-radius: 20px; font-size: 14px; z-index: 999999; opacity: 0; transition: opacity 0.3s; pointer-events: none; font-weight: 500; }
+    .editor-toast.show { opacity: 1; }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #C6C6C8; border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    /* ==================== 内搭：原版公告板渲染 UI ==================== */
+    @font-face { font-family: 'egnotice-font-title'; src: url('css/egnotice/华康 新篆体 繁简字库_w9_gb.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+    @font-face { font-family: 'egnotice-font-yuan'; src: url('css/egnotice/华文圆体-bold-2.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+    .egnotice-overlay { position: fixed !important; inset: 0 !important; background: rgba(0, 0, 0, 0.5) !important; display: flex !important; align-items: center !important; justify-content: center !important; z-index: 999999 !important; text-align: left; overflow: auto; }
+    .egnotice-overlay.hidden { display: none !important; }
+    .egnotice-dialog { position: relative; width: 770px; height: 440px; flex-shrink: 0; transform: scale(var(--egnotice-scale, 1)); transform-origin: center center; }
+    .egnotice-bg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 730px; height: 400px; background: url('css/egnotice/公告栏_主体_notice_bg.png') no-repeat center / contain; }
+    .egnotice-main-title { position: absolute; top: 40px; left: 0; right: 0; text-align: center; color: #FFFFFF; font-size: 24px; font-family: 'egnotice-font-title', 'egnotice-font-yuan', 'Microsoft YaHei', 'PingFang SC', sans-serif; font-weight: 700; padding: 15px 0 12px; text-shadow: 2px 0 0 #ff8914, -2px 0 0 #ff8914, 0 2px 0 #ff8914, 0 -2px 0 #ff8914, 1.5px 1.5px 0 #ff8914, -1.5px 1.5px 0 #ff8914, 1.5px -1.5px 0 #ff8914, -1.5px -1.5px 0 #ff8914; white-space: normal; overflow: visible; }
+    .egnotice-body { position: absolute; inset: 0; display: flex; flex-direction: row; padding: 120px 115px 60px 32px; }
+    .egnotice-tabs { width: 140px; flex: none; display: flex; flex-direction: column; align-items: center; margin: 8px 0 0 -20px; }
+    .egnotice-tab { width: 125px; aspect-ratio: 324 / 106; position: relative; cursor: pointer; text-align: center; margin: 0 0 4px -1px; }
+    .egnotice-tab.active { background: url('css/egnotice/公告栏左侧选区_btn_tab.png') no-repeat center / 100% 100%; }
+    .egnotice-tab-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #302E10; font-family: 'egnotice-font-title', 'egnotice-font-yuan', 'Microsoft YaHei', sans-serif; font-weight: 700; line-height: 1.2; transform: translateX(18px); }
+    .egnotice-tab.active .egnotice-tab-text { font-size: 15px; }
+    .egnotice-divider { width: 70px; height: 3px; background: url('css/egnotice/公告栏左侧选条装饰_notice_line.png') no-repeat center / 100% 100%; margin: -6px 0 3px 32px; }
+    .egnotice-panel { flex: 1; position: relative; margin-top: -19px; min-width: 0; }
+    .egnotice-scroll { position: absolute; inset: 0; overflow-y: auto; padding: 0 15px 0 5px; margin-right: 10px; scrollbar-width: none; }
+    .egnotice-scroll::-webkit-scrollbar { display: none; }
+    .egnotice-scrollbar { position: absolute; right: 3px; top: 19px; bottom: 64px; width: 4px; background: url('css/egnotice/公告栏右侧滑动条_notice_bg_bar.png') no-repeat center / 3px 100%; }
+    .egnotice-scrollbar-thumb { position: absolute; left: 0; top: 0; width: 4px; height: 24px; border-radius: 2px; background: #ff8914; }
+    .egnotice-close { position: absolute; top: 41px; right: 76px; width: 40px; height: 40px; padding: 0; border: none; background: transparent url('css/egnotice/公告栏_取消键_btn_close.png') no-repeat center / 100% 100%; cursor: pointer; }
+    .egnotice-cat-section { margin-bottom: 16px; }
+    .egnotice-cat-head { position: relative; margin: 16px 0 5px; }
+    .egnotice-cat-head-bg { display: block; width: 100%; height: auto; }
+    .egnotice-cat-head-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #ef5a09; font-size: 27px; font-family: 'egnotice-font-title', 'egnotice-font-yuan', 'Microsoft YaHei', sans-serif; font-weight: 700; text-shadow: 3px 0 0 #FFFFFF, -3px 0 0 #FFFFFF, 0 3px 0 #FFFFFF, 0 -3px 0 #FFFFFF, 2px 2px 0 #FFFFFF, -2px 2px 0 #FFFFFF, 2px -2px 0 #FFFFFF, -2px -2px 0 #FFFFFF; white-space: normal; overflow: visible; }
+    .egnotice-cat-title-plain { font-size: 16px; font-weight: 700; color: #000000; padding: 8px 0; text-align: left; font-family: 'egnotice-font-yuan', 'Microsoft YaHei', sans-serif; }
+    .egnotice-subtitle { position: relative; height: 30px; }
+    .egnotice-subtitle-bg { position: absolute; left: 5px; top: 0; height: 30px; width: auto; max-width: 100%; }
+    .egnotice-subtitle-text { position: absolute; inset: 0; padding: 9px 16px 8px 17px; color: #FFFFFF; font-size: 14px; font-family: 'egnotice-font-yuan', 'Microsoft YaHei', sans-serif; font-weight: 700; line-height: 1.2; text-align: left; text-shadow: 2px 0 0 #ff6825, -2px 0 0 #ff6825, 0 2px 0 #ff6825, 0 -2px 0 #ff6825, 1.5px 1.5px 0 #ff6825, -1.5px 1.5px 0 #ff6825, 1.5px -1.5px 0 #ff6825, -1.5px -1.5px 0 #ff6825; white-space: normal; overflow: visible; }
+    .egnotice-paragraph { font-size: 13px; color: #000000; line-height: 20px; white-space: pre-line; word-break: break-word; text-align: left; font-family: 'egnotice-font-yuan', 'Microsoft YaHei', sans-serif; font-weight: 700; padding: 4px 16px 12px 12px; }
+    .egnotice-paragraph-main { padding-left: 5px; }
+    .egnotice-link { text-decoration: underline; cursor: pointer; word-break: break-all; }
+    .egnotice-styled { display: inline; }
+    .egnotice-inline-img { display: inline-block; vertical-align: middle; max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <div id="editor-tabbar"></div>
+  <div id="editor-content"></div>
+
+  <div class="my-modal-mask" id="my-modal-mask">
+    <div class="my-modal-box">
+      <div class="my-modal-title" id="my-modal-title">提示</div>
+      <input type="text" class="my-modal-input" id="my-modal-input" style="display: none;" />
+      <div class="my-modal-btns" id="my-modal-btns">
+        <button class="my-modal-btn cancel" id="my-modal-cancel">取消</button>
+        <button class="my-modal-btn confirm" id="my-modal-confirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="my-modal-mask" id="img-select-mask">
+    <div class="my-modal-box" style="max-width: 400px; padding-bottom: 16px;">
+      <div class="my-modal-title">选择头图</div>
+      <div class="custom-img-list" id="custom-img-list-container"></div>
+      <div style="text-align: center; padding-top: 10px;">
+        <button class="editor-btn" style="width: 80%;" onclick="document.getElementById('img-select-mask').classList.remove('show')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 1. 底层渲染引擎 ====================
+    (function (global) {
+      'use strict';
+      var ROOT_ID = 'egnotice-root', THUMB_HEIGHT = 24;
+      var DEFAULTS = { assetsBase: 'css/egnotice/', firstTabTitle: '请添加节目', mainTitle: '', autoOpen: true, onClose: null };
+      var config = {}, data = [], root = null, currentIndex = 0, spyLock = false, leadBlocks = 0;
+
+      var IMAGE_MAP = {
+        'img_activity_pic.png': '蓝粉黄底_pic.png', 'img_activity_pic_1.png': '黄蓝粉蛋码_activity_pic_1.png', 'img_activity_pic_2.png': '黄蓝黑蛋仔岛_activity_pic_2.png', 'img_activity_pic_3.png': '黄 蛋仔工坊_activity_pic_3.png', 'img_activity_pic_4.png': '黄蓝粉新春底_activity_pic_4.png', 'img_activity_pic_5.png': '黄黑巅峰赛_activity_pic_5.png', 'img_activity_pic_6.png': '黄黑粉红底_activity_pic_6.png', 'img_activity_pic_7.png': '黄粉黑新春_activity_pic_7.png', 'img_activity_pic_9.png': '黄黑粉彩道冲刺_activity_pic_9.png', 'img_adjust_pic.png': '蛋小黄_施工_adjust_pic.png', 'img_play_pic.png': '黄粉天空底板_play_pic.png', 'img_paradise_pic.png': '积木蛋仔_paradise_pic.png', 'img_title_bg.png': '子标题栏框_title_bg.png', 'img_notice_bg.png': '公告栏_主体_notice_bg.png', 'notice_btn_tab.png': '公告栏左侧选区_btn_tab.png', 'img_notice_bg_bar.png': '公告栏右侧滑动条_notice_bg_bar.png', 'img_btn_close.png': '公告栏_取消键_btn_close.png', 'img_notice_line.png': '公告栏左侧选条装饰_notice_line.png'
+      };
+
+      function extend() { var out = {}; for (var i = 0; i < arguments.length; i++) { var src = arguments[i]; if (!src) continue; for (var k in src) { if (Object.prototype.hasOwnProperty.call(src, k)) out[k] = src[k]; } } return out; }
+      function assetUrl(path) { if (!path) return ''; var p = String(path); if (IMAGE_MAP[p]) p = IMAGE_MAP[p]; if (/^(blob:|data:|https?:|file:|\/\/)/i.test(p) || p.charAt(0) === '/') return p; var base = config.assetsBase || ''; if (base && base.charAt(base.length - 1) !== '/') base += '/'; return base + p; }
+      global._egAssetUrl = assetUrl;
+
+      function parseColor(colorCode) { if (!colorCode) return '#000000'; var s = String(colorCode); if (s.charAt(0) === '#' && s.charAt(1) === 'c') s = '#' + s.substring(2); if (s.charAt(0) !== '#' && /^[0-9a-fA-F]{6}$/.test(s)) s = '#' + s; return /^#[0-9a-fA-F]{6}$/.test(s) ? s : '#000000'; }
+      function parseStyleParams(paramStr) { var params = {}; var pairs = String(paramStr || '').split('|'); for (var i = 0; i < pairs.length; i++) { var idx = pairs[i].indexOf(':'); if (idx > 0) params[pairs[i].substring(0, idx)] = pairs[i].substring(idx + 1); } return params; }
+      function makeTextSpan(text, color) { var span = document.createElement('span'); span.style.color = color; span.appendChild(document.createTextNode(text)); return span; }
+      function buildOutlineShadow(color, size) { var s = size || 1; var c = parseColor(color); var d = (s * 0.7).toFixed(1); return [s + 'px 0 0 ' + c, '-' + s + 'px 0 0 ' + c, '0 ' + s + 'px 0 ' + c, '0 -' + s + 'px 0 ' + c, d + 'px ' + d + 'px 0 ' + c, '-' + d + 'px ' + d + 'px 0 ' + c, d + 'px -' + d + 'px 0 ' + c, '-' + d + 'px -' + d + 'px 0 ' + c]; }
+      function buildGlowShadow(color, size) { var s = parseInt(size, 10) || 5; var c = parseColor(color); return ['0 0 ' + s + 'px ' + c, '0 0 ' + (s * 2) + 'px ' + c, '0 0 ' + (s * 3) + 'px ' + c]; }
+      function applyStyles(el, params, parentColor) { var color = params.c ? parseColor(params.c) : parentColor; el.style.color = color; if (params.s) { var sz = parseInt(params.s, 10); if (sz > 0) el.style.fontSize = sz + 'px'; } var shadows = []; if (params.o) shadows = shadows.concat(buildOutlineShadow(params.o, parseInt(params.O, 10) || 1)); if (params.g) shadows = shadows.concat(buildGlowShadow(params.g, params.G)); if (shadows.length) el.style.textShadow = shadows.join(', '); if (params.y) { var yo = parseInt(params.Y, 10) || 2; el.style.filter = 'drop-shadow(' + yo + 'px ' + yo + 'px 0 ' + parseColor(params.y) + ')'; } var decos = []; if (params.h) decos.push('line-through'); if (params.u) decos.push('underline'); if (decos.length) { el.style.textDecoration = decos.join(' '); el.style.textDecorationColor = parseColor(params.u || params.h); } }
+      function buildStyledSpan(innerText, params, parentColor) { var color = params.c ? parseColor(params.c) : parentColor; var el; if (params.e) { el = document.createElement('a'); el.className = 'egnotice-link'; el.href = innerText.trim(); el.target = '_blank'; el.rel = 'noopener'; } else { el = document.createElement('span'); el.className = 'egnotice-styled'; } applyStyles(el, params, color); el.appendChild(buildRichText(innerText, color)); return el; }
+      function buildInlineImage(params) { var img = document.createElement('img'); img.className = 'egnotice-inline-img'; img.alt = ''; if (params.f) img.src = assetUrl(params.f); if (params.s) { var size = parseInt(params.s, 10); if (size > 0) { img.style.width = size + 'px'; img.style.height = 'auto'; } } img.onerror = function () { this.style.display = 'none'; }; return img; }
+      function findNextMarker(str, from) { var candidates = [], idx; idx = str.indexOf('#l', from); if (idx !== -1) candidates.push(idx); idx = str.indexOf('#f(', from); if (idx !== -1) candidates.push(idx); idx = str.indexOf('#p(', from); if (idx !== -1) candidates.push(idx); var colorRe = /#c[0-9a-fA-F]{6}/g; colorRe.lastIndex = from; var cm = colorRe.exec(str); if (cm) candidates.push(cm.index); if (!candidates.length) return -1; return Math.min.apply(null, candidates); }
+      function buildRichText(text, initialColor) { var frag = document.createDocumentFragment(); if (!text) return frag; var str = String(text), len = str.length, currentColor = initialColor || '#000000', i = 0, buffer = ''; function flushBuffer() { if (buffer) { frag.appendChild(makeTextSpan(buffer, currentColor)); buffer = ''; } } while (i < len) { if (str.charAt(i) === '#' && str.charAt(i + 1) === 'c' && /^[0-9a-fA-F]{6}$/.test(str.substring(i + 2, i + 8))) { flushBuffer(); currentColor = '#' + str.substring(i + 2, i + 8); i += 8; continue; } if (str.charAt(i) === '#' && str.charAt(i + 1) === 'f' && str.charAt(i + 2) === '(') { var closeParen = str.indexOf(')', i + 3); if (closeParen !== -1) { flushBuffer(); var params = parseStyleParams(str.substring(i + 3, closeParen)); var endIdx = findNextMarker(str, closeParen + 1); var innerText; if (endIdx !== -1) { innerText = str.substring(closeParen + 1, endIdx); i = endIdx; } else { innerText = str.substring(closeParen + 1); i = len; } frag.appendChild(buildStyledSpan(innerText, params, currentColor)); continue; } } if (str.charAt(i) === '#' && str.charAt(i + 1) === 'p' && str.charAt(i + 2) === '(') { var imgClose = str.indexOf(')', i + 3); if (imgClose !== -1) { flushBuffer(); var imgParams = parseStyleParams(str.substring(i + 3, imgClose)); frag.appendChild(buildInlineImage(imgParams)); i = imgClose + 1; continue; } } if (str.charAt(i) === '#' && str.charAt(i + 1) === 'l') { i += 2; continue; } buffer += str.charAt(i); i++; } flushBuffer(); return frag; }
+      function isSubtitleBlock(block) { return block.indexOf('#image#') !== -1; }
+      function splitSubtitle(block) { var idx = block.indexOf('#image#'); return { text: block.substring(0, idx).trim(), path: block.substring(idx + 7).trim() }; }
+      function onDocKeydown(e) { if (e.key === 'Escape' && root) close(); }
+      function onWinResize() { applyScale(); }
+      function onImgLoad(e) { if (e.target && e.target.tagName === 'IMG' && root && root.contains(e.target)) syncScrollbar(); }
+      function detachListeners() { document.removeEventListener('keydown', onDocKeydown); document.removeEventListener('load', onImgLoad, true); window.removeEventListener('resize', onWinResize); }
+      function resetState() { root = null; currentIndex = 0; spyLock = false; leadBlocks = 0; }
+      function buildBoard() {
+        if (root) { if (document.body && document.body.contains(root)) return; detachListeners(); resetState(); }
+        root = document.createElement('div'); root.id = ROOT_ID; root.className = 'egnotice-overlay hidden';
+        var dialog = document.createElement('div'); dialog.className = 'egnotice-dialog';
+        var bg = document.createElement('div'); bg.className = 'egnotice-bg';
+        var mainTitle = document.createElement('div'); mainTitle.className = 'egnotice-main-title';
+        var body = document.createElement('div'); body.className = 'egnotice-body';
+        var tabs = document.createElement('div'); tabs.className = 'egnotice-tabs';
+        var panel = document.createElement('div'); panel.className = 'egnotice-panel';
+        var scroll = document.createElement('div'); scroll.className = 'egnotice-scroll';
+        var content = document.createElement('div'); content.className = 'egnotice-content'; scroll.appendChild(content);
+        var scrollbar = document.createElement('div'); scrollbar.className = 'egnotice-scrollbar';
+        var thumb = document.createElement('div'); thumb.className = 'egnotice-scrollbar-thumb'; scrollbar.appendChild(thumb);
+        panel.appendChild(scroll); panel.appendChild(scrollbar); body.appendChild(tabs); body.appendChild(panel);
+        var closeBtn = document.createElement('button'); closeBtn.type = 'button'; closeBtn.className = 'egnotice-close'; closeBtn.setAttribute('aria-label', '关闭');
+        dialog.appendChild(bg); dialog.appendChild(mainTitle); dialog.appendChild(body); dialog.appendChild(closeBtn);
+        root.appendChild(dialog); document.body.appendChild(root);
+        closeBtn.addEventListener('click', close);
+        root.addEventListener('click', function (e) { if (e.target === root) close(); });
+        document.addEventListener('keydown', onDocKeydown);
+        tabs.addEventListener('click', function (e) { var el = e.target; while (el && el !== tabs) { if (el.classList && el.classList.contains('egnotice-tab')) { switchCategory(parseInt(el.getAttribute('data-index'), 10)); return; } el = el.parentNode; } });
+        scroll.addEventListener('scroll', onScroll);
+        document.addEventListener('load', onImgLoad, true);
+        window.addEventListener('resize', onWinResize);
+        root._dialog = dialog; root._mainTitle = mainTitle; root._tabs = tabs; root._content = content; root._scroll = scroll; root._scrollbar = scrollbar; root._thumb = thumb;
+      }
+      function renderTabs() { var tabsEl = root._tabs; tabsEl.textContent = ''; for (var i = 0; i < data.length; i++) { var label = (data[i] && data[i].title) || (i === 0 ? config.firstTabTitle : ''); var tab = document.createElement('div'); tab.className = 'egnotice-tab' + (i === currentIndex ? ' active' : ''); tab.setAttribute('data-index', i); var text = document.createElement('span'); text.className = 'egnotice-tab-text'; text.textContent = label; tab.appendChild(text); tabsEl.appendChild(tab); var divider = document.createElement('div'); divider.className = 'egnotice-divider'; tabsEl.appendChild(divider); } }
+      function renderAllSections() { var contentEl = root._content; contentEl.textContent = ''; for (var i = 0; i < data.length; i++) { var item = data[i]; var section = document.createElement('div'); section.className = 'egnotice-cat-section'; section.setAttribute('data-index', i); var blocks = Array.isArray(item.content) ? item.content : []; var blockStart = 0; if (i === 0 && leadBlocks > 0) { blockStart = Math.min(leadBlocks, blocks.length); for (var m = 0; m < blockStart; m++) { var leadBlock = blocks[m]; if (!leadBlock || !String(leadBlock).trim()) continue; if (isSubtitleBlock(leadBlock)) { var leadSub = splitSubtitle(leadBlock); section.appendChild(buildSubtitle(leadSub.text, leadSub.path)); } else { section.appendChild(buildParagraph(leadBlock, true)); } } } if (item.title_bg_path) { var head = document.createElement('div'); head.className = 'egnotice-cat-head'; var img = document.createElement('img'); img.className = 'egnotice-cat-head-bg'; img.alt = ''; img.src = assetUrl(item.title_bg_path); img.onerror = function () { this.style.display = 'none'; }; var headText = document.createElement('div'); headText.className = 'egnotice-cat-head-text'; headText.textContent = item.title || ''; head.appendChild(img); head.appendChild(headText); section.appendChild(head); } else { var plain = document.createElement('div'); plain.className = 'egnotice-cat-title-plain'; plain.textContent = item.title || ''; section.appendChild(plain); } for (var b = blockStart; b < blocks.length; b++) { var block = blocks[b]; if (!block || !String(block).trim()) continue; if (isSubtitleBlock(block)) { var sub = splitSubtitle(block); section.appendChild(buildSubtitle(sub.text, sub.path)); } else { section.appendChild(buildParagraph(block, i === 0 && leadBlocks === 0)); } } contentEl.appendChild(section); } }
+      function buildSubtitle(text, path) { var wrap = document.createElement('div'); wrap.className = 'egnotice-subtitle'; var img = document.createElement('img'); img.className = 'egnotice-subtitle-bg'; img.alt = ''; img.src = assetUrl(path); img.onerror = function () { this.style.display = 'none'; }; var txt = document.createElement('div'); txt.className = 'egnotice-subtitle-text'; txt.textContent = text; wrap.appendChild(img); wrap.appendChild(txt); return wrap; }
+      function buildParagraph(text, isMain) { var p = document.createElement('div'); p.className = 'egnotice-paragraph' + (isMain ? ' egnotice-paragraph-main' : ''); p.appendChild(buildRichText(text)); return p; }
+      function onScroll() { syncScrollbar(); updateActiveTab(); }
+      function updateActiveTab() { if (spyLock) return; if (!root) return; var sections = root.querySelectorAll('.egnotice-cat-section'); if (!sections.length) return; var scroll = root._scroll; var rect = scroll.getBoundingClientRect(); if (!rect.width || !rect.height) return; var viewBottom = rect.bottom; var current = 0; for (var i = 0; i < sections.length - 1; i++) { if (sections[i + 1].getBoundingClientRect().top <= viewBottom) { current = i + 1; } else { break; } } setActiveTab(current); }
+      function setActiveTab(idx) { currentIndex = idx; var tabs = root._tabs.querySelectorAll('.egnotice-tab'); for (var i = 0; i < tabs.length; i++) { if (i === idx) tabs[i].classList.add('active'); else tabs[i].classList.remove('active'); } }
+      function switchCategory(idx) { if (idx < 0 || idx >= data.length) return; var sections = root.querySelectorAll('.egnotice-cat-section'); var section = sections[idx]; if (!section) return; var scroll = root._scroll; var rect = scroll.getBoundingClientRect(); var scale = 1; if (root._dialog) { var v = parseFloat(root._dialog.style.getPropertyValue('--egnotice-scale')); if (isFinite(v) && v > 0) scale = v; } var target = 0; if (idx > 0 && sections[idx - 1]) { var anchorTop = sections[idx - 1].getBoundingClientRect().bottom; target = (anchorTop - rect.top) / scale + scroll.scrollTop; } if (target < 0) target = 0; scroll.scrollTo({ top: target, behavior: 'auto' }); spyLock = true; setActiveTab(idx); syncScrollbar(); requestAnimationFrame(function () { requestAnimationFrame(function () { spyLock = false; }); }); }
+      function syncScrollbar() { if (!root) return; var scroll = root._scroll; var thumb = root._thumb; var maxScroll = scroll.scrollHeight - scroll.clientHeight; if (maxScroll <= 1) { thumb.style.display = 'none'; return; } thumb.style.display = ''; var trackHeight = root._scrollbar.offsetHeight; var maxTop = Math.max(0, trackHeight - THUMB_HEIGHT); var ratio = Math.min(1, Math.max(0, scroll.scrollTop / maxScroll)); thumb.style.top = (ratio * maxTop) + 'px'; }
+      function applyScale() { if (!root || !root._dialog) return; var vw = window.innerWidth || document.documentElement.clientWidth || 0; var vh = window.innerHeight || document.documentElement.clientHeight || 0; var scale = 1; if (vw > 0 && vh > 0) { scale = Math.min((vw * 1.10) / 770, (vh * 1.05) / 440); scale = Math.max(0.3, Math.min(5, scale)); } root._dialog.style.setProperty('--egnotice-scale', scale.toFixed(3)); }
+      function normalizeData(items) { var arr = Array.isArray(items) ? items.slice() : []; leadBlocks = 0; if (arr.length >= 2 && arr[0] && arr[1] && !arr[0].title_bg_path) { var head = Array.isArray(arr[0].content) ? arr[0].content : []; var tail = Array.isArray(arr[1].content) ? arr[1].content : []; leadBlocks = head.length; arr[1].content = head.concat(tail); arr.shift(); } return arr; }
+      function render(dataArr, options) { if (!Array.isArray(dataArr) || dataArr.length === 0) throw new Error('[EgNotice] 缺少公告数据'); config = extend({}, DEFAULTS, config, options || {}); data = normalizeData(dataArr); currentIndex = 0; buildBoard(); root._mainTitle.textContent = config.mainTitle || (dataArr[0] && dataArr[0].title) || ''; renderTabs(); renderAllSections(); root.classList.remove('hidden'); root._scroll.scrollTop = 0; syncScrollbar(); updateActiveTab(); applyScale(); }
+      function close() { if (!root) return; detachListeners(); if (root.parentNode) root.parentNode.removeChild(root); resetState(); if (typeof config.onClose === 'function') { try { config.onClose(); } catch (e) { console.warn(e); } } }
+      function init(options) { options = options || {}; config = extend({}, DEFAULTS, config, options); if (config.url && config.autoOpen !== false) open(config.url); }
+      function open(url, options) { if (options) config = extend({}, DEFAULTS, config, options); if (!url) throw new Error('[EgNotice] open(url) 缺少数据地址'); return fetch(url, { credentials: 'omit' }).then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); }).then(function (d) { render(d); }); }
+      global.EgNotice = { init: init, open: open, render: render, close: close };
+    })(window);
+
+    // ==================== 2. 富文本生成器 ====================
+    (function (global) {
+      'use strict';
+      var STYLES = [
+        { id: 'color', name: '颜色', params: [{ name: '颜色', type: 'color' }], format: 'c:{颜色}', end: false, image: false },
+        { id: 'size', name: '字号', params: [{ name: '字号', type: 'number' }], format: 's:{字号}', end: false, image: false },
+        { id: 'outline', name: '描边', params: [{ name: '颜色', type: 'color' }, { name: '大小', type: 'number' }], format: 'o:{颜色}|O:{大小}', end: false, image: false },
+        { id: 'glow', name: '外发光', params: [{ name: '颜色', type: 'color' }, { name: '大小', type: 'number' }], format: 'g:{颜色}|G:{大小}', end: false, image: false },
+        { id: 'shadow', name: '投影', params: [{ name: '颜色', type: 'color' }, { name: '偏移', type: 'number' }], format: 'y:{颜色}|Y:{偏移}', end: false, image: false },
+        { id: 'strike', name: '中划线', params: [{ name: '颜色', type: 'color' }], format: 'h:{颜色}', end: false, image: false },
+        { id: 'underline', name: '下划线', params: [{ name: '颜色', type: 'color' }], format: 'u:{颜色}', end: false, image: false },
+        { id: 'link', name: '超链接', params: [], format: 'e:url_0|i:link_inner', end: false, image: false },
+        { id: 'end', name: '结束富文本', params: [], format: '#l', end: true, image: false },
+        { id: 'image', name: '插入图片', params: [{ name: 'url', type: 'text' }, { name: '大小', type: 'number' }], format: '#p(f:{url}|s:{大小})', end: false, image: true }
+      ];
+      function getStyleById(id) { for (var i = 0; i < STYLES.length; i++) { if (STYLES[i].id === id) return STYLES[i]; } return null; }
+      function fillFormat(formatStr, params, values) { var result = formatStr, vals = values || {}; for (var i = 0; i < params.length; i++) { var p = params[i], placeholder = '{' + p.name + '}', raw = vals[p.name] != null ? vals[p.name] : '', val = String(raw); if (p.type === 'color') val = val.replace(/^#/, ''); result = result.split(placeholder).join(val); } return result; }
+      global.RichText = {
+        STYLES: STYLES,
+        generate: function (selectedIds, paramValues) {
+          if (!selectedIds || !selectedIds.length) return '';
+          if (selectedIds.indexOf('image') !== -1) { var imgStyle = getStyleById('image'); if (!imgStyle) return ''; var imgVals = (paramValues && paramValues.image) || {}; return fillFormat(imgStyle.format, imgStyle.params, imgVals); }
+          if (selectedIds.length === 1 && selectedIds[0] === 'end') return '#l';
+          var filtered = []; for (var i = 0; i < selectedIds.length; i++) { var sid = selectedIds[i]; if (sid !== 'end' && sid !== 'image') filtered.push(sid); }
+          if (!filtered.length) return '';
+          var parts = []; for (var j = 0; j < filtered.length; j++) { var st = getStyleById(filtered[j]); if (!st) continue; var vals = (paramValues && paramValues[st.id]) || {}; parts.push(fillFormat(st.format, st.params, vals)); }
+          if (!parts.length) return '';
+          var placeholder = filtered.indexOf('link') !== -1 ? '链接url' : '文字';
+          return '#f(' + parts.join('|') + ')' + placeholder;
+        },
+        countNetChars: function (text) { if (text == null) return 0; var s = String(text); s = s.replace(/#c[0-9a-fA-F]{6}/g, '').replace(/#f\([^)]*\)/g, '').replace(/#l/g, '').replace(/#p\([^)]*\)/g, '').replace(/#image#.*$/gm, '').replace(/\n/g, ''); return s.length; }
+      };
+    })(window);
+
+    // ==================== 3. 状态控制 ====================
+    (function (global) {
+      'use strict';
+      var HEAD_IMAGES = ['黄 蛋仔工坊_activity_pic_3.png', '黄粉黑新春_activity_pic_7.png', '黄粉天空底板_play_pic.png', '黄黑巅峰赛_activity_pic_5.png', '黄黑粉彩道冲刺_activity_pic_9.png', '黄黑粉红底_activity_pic_6.png', '黄蓝粉蛋码_activity_pic_1.png', '黄蓝粉新春底_activity_pic_4.png', '黄蓝黑蛋仔岛_activity_pic_2.png', '积木蛋仔_paradise_pic.png', '蓝粉黄底_pic.png', '蛋小黄_施工_adjust_pic.png'];
+      var IMAGE_MAP = { 'img_activity_pic.png': '蓝粉黄底_pic.png', 'img_activity_pic_1.png': '黄蓝粉蛋码_activity_pic_1.png', 'img_activity_pic_2.png': '黄蓝黑蛋仔岛_activity_pic_2.png', 'img_activity_pic_3.png': '黄 蛋仔工坊_activity_pic_3.png', 'img_activity_pic_4.png': '黄蓝粉新春底_activity_pic_4.png', 'img_activity_pic_5.png': '黄黑巅峰赛_activity_pic_5.png', 'img_activity_pic_6.png': '黄黑粉红底_activity_pic_6.png', 'img_activity_pic_7.png': '黄粉黑新春_activity_pic_7.png', 'img_activity_pic_9.png': '黄黑粉彩道冲刺_activity_pic_9.png', 'img_adjust_pic.png': '蛋小黄_施工_adjust_pic.png', 'img_play_pic.png': '黄粉天空底板_play_pic.png', 'img_paradise_pic.png': '积木蛋仔_paradise_pic.png' };
+
+      var state = { columns: [] }, tabs = [], activeTabId = null, toastTimer = null, resizeTimer = null;
+      var pages = { main: { render: null, refresh: null }, column: { render: null, refresh: null }, subtitle: { render: null, refresh: null } };
+      function $(id) { return document.getElementById(id); }
+      function genId() { return 'id_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5); }
+      function escapeHtml(str) { var s = (str == null) ? '' : String(str); return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+      function showToast(msg) { var el = $('editor-toast'); if (!el) { el = document.createElement('div'); el.id = 'editor-toast'; el.className = 'editor-toast'; document.body.appendChild(el); } el.textContent = msg; el.classList.add('show'); if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2500); }
+      function findColumn(columnId) { if (!columnId) return null; for (var i = 0; i < state.columns.length; i++) { if (state.columns[i].id === columnId) return state.columns[i]; } return null; }
+      function findSubtitle(columnId, subtitleId) { var col = findColumn(columnId); if (!col || !subtitleId) return null; for (var i = 0; i < col.subtitles.length; i++) { if (col.subtitles[i].id === subtitleId) return col.subtitles[i]; } return null; }
+      function findSubtitleColumn(subtitleId) { if (!subtitleId) return null; for (var i = 0; i < state.columns.length; i++) { var subs = state.columns[i].subtitles; for (var j = 0; j < subs.length; j++) { if (subs[j].id === subtitleId) return state.columns[i]; } } return null; }
+      function findTabById(tabId) { for (var i = 0; i < tabs.length; i++) { if (tabs[i].id === tabId) return tabs[i]; } return null; }
+      function getTabByTypeAndData(type, dataId) { for (var i = 0; i < tabs.length; i++) { if (tabs[i].type === type && tabs[i].dataId === dataId) return tabs[i]; } return null; }
+      function updateTabBar() { var bar = $('editor-tabbar'); if (!bar) return; bar.textContent = ''; for (var i = 0; i < tabs.length; i++) { var t = tabs[i]; var el = document.createElement('div'); var cls = 'editor-tab'; if (t.id === activeTabId) cls += ' active'; if (t.type === 'main') cls += ' main'; el.className = cls; el.setAttribute('data-tab-id', t.id); el.setAttribute('title', t.title || ''); var text = document.createElement('span'); text.className = 'editor-tab-text'; text.textContent = t.title || ''; el.appendChild(text); var close = document.createElement('span'); close.className = 'editor-tab-close'; close.textContent = '×'; el.appendChild(close); bar.appendChild(el); } }
+      function updateTabTitle(tabId, newTitle) { var t = findTabById(tabId); if (!t) return; t.title = newTitle; updateTabBar(); }
+      function updateDocumentTitle() { var t = findTabById(activeTabId); if (t) document.title = t.title || '公告创建器'; }
+      function switchTab(tabId) { var t = findTabById(tabId); if (!t) return; activeTabId = tabId; var pagesEls = document.querySelectorAll('#editor-content > .editor-page'); for (var i = 0; i < pagesEls.length; i++) pagesEls[i].classList.remove('active'); if (t.containerEl) t.containerEl.classList.add('active'); updateTabBar(); updateDocumentTitle(); }
+      function openTab(type, dataId) { if (type === 'main') { switchTab('main'); updateTabBar(); updateDocumentTitle(); return; } var existing = getTabByTypeAndData(type, dataId); if (existing) { switchTab(existing.id); updateTabBar(); updateDocumentTitle(); return; } var contentEl = $('editor-content'); if (!contentEl) return; var title = ''; var container = document.createElement('div'); container.className = 'editor-page'; contentEl.appendChild(container); var newTab = { id: genId(), type: type, dataId: dataId, title: '', containerEl: container }; if (type === 'column') { var column = findColumn(dataId); if (!column) { if (container.parentNode) container.parentNode.removeChild(container); return; } title = '栏目-' + column.name; if (pages.column.render) pages.column.render(container, dataId); } else if (type === 'subtitle') { var col = findSubtitleColumn(dataId); if (!col) { if (container.parentNode) container.parentNode.removeChild(container); return; } var subtitle = findSubtitle(col.id, dataId); var subName = subtitle ? subtitle.name : ''; title = '内容-' + subName; if (pages.subtitle.render) pages.subtitle.render(container, col.id, dataId); } else { if (container.parentNode) container.parentNode.removeChild(container); return; } newTab.title = title; tabs.push(newTab); switchTab(newTab.id); updateTabBar(); updateDocumentTitle(); }
+      function closeTab(tabId) { if (tabId === 'main') return; var idx = -1; for (var i = 0; i < tabs.length; i++) { if (tabs[i].id === tabId) { idx = i; break; } } if (idx === -1) return; var tab = tabs[idx]; if (tab.containerEl && tab.containerEl.parentNode) tab.containerEl.parentNode.removeChild(tab.containerEl); tabs.splice(idx, 1); if (activeTabId === tabId) switchTab('main'); else updateTabBar(); }
+      function addColumn() { if (state.columns.length >= 6) { showToast('最多只能添加6个栏目'); return null; } var col = { id: genId(), name: '新栏目', headImage: 'none', headImageUrl: '', subtitles: [] }; state.columns.push(col); refreshDisplay(); return col.id; }
+      function removeColumn(columnId) { if (state.columns.length === 0) return; var idx = -1; if (columnId) { for (var i = 0; i < state.columns.length; i++) { if (state.columns[i].id === columnId) { idx = i; break; } } } else { idx = state.columns.length - 1; } if (idx === -1) return; var tabsToClose = []; for (var t = 0; t < tabs.length; t++) { if (tabs[t].type === 'column' && tabs[t].dataId === state.columns[idx].id) { tabsToClose.push(tabs[t].id); } else if (tabs[t].type === 'subtitle') { var subCol = findSubtitleColumn(tabs[t].dataId); if (subCol && subCol.id === state.columns[idx].id) tabsToClose.push(tabs[t].id); } } state.columns.splice(idx, 1); for (var j = 0; j < tabsToClose.length; j++) closeTab(tabsToClose[j]); refreshDisplay(); }
+      function moveColumn(columnId, direction) { if (!columnId) return; var idx = -1; for (var i = 0; i < state.columns.length; i++) { if (state.columns[i].id === columnId) { idx = i; break; } } if (idx === -1) return; if (direction === 'up' && idx > 0) { var tmpUp = state.columns[idx - 1]; state.columns[idx - 1] = state.columns[idx]; state.columns[idx] = tmpUp; refreshDisplay(); } else if (direction === 'down' && idx < state.columns.length - 1) { var tmpDown = state.columns[idx + 1]; state.columns[idx + 1] = state.columns[idx]; state.columns[idx] = tmpDown; refreshDisplay(); } }
+      function addSubtitle(columnId) { var col = findColumn(columnId); if (!col) return null; var sub = { id: genId(), name: '新子标题', content: '' }; col.subtitles.push(sub); refreshDisplay(); return sub.id; }
+      function removeSubtitle(columnId, subtitleId) { var col = findColumn(columnId); if (!col) return; if (col.subtitles.length === 0) return; var idx = -1; if (subtitleId) { for (var i = 0; i < col.subtitles.length; i++) { if (col.subtitles[i].id === subtitleId) { idx = i; break; } } } else { idx = col.subtitles.length - 1; } if (idx === -1) return; var removedId = col.subtitles[idx].id; col.subtitles.splice(idx, 1); var tabsToClose = []; for (var t = 0; t < tabs.length; t++) { if (tabs[t].type === 'subtitle' && tabs[t].dataId === removedId) tabsToClose.push(tabs[t].id); } for (var j = 0; j < tabsToClose.length; j++) closeTab(tabsToClose[j]); refreshDisplay(); }
+      function moveSubtitle(columnId, subtitleId, direction) { var col = findColumn(columnId); if (!col || !subtitleId) return; var idx = -1; for (var i = 0; i < col.subtitles.length; i++) { if (col.subtitles[i].id === subtitleId) { idx = i; break; } } if (idx === -1) return; if (direction === 'up' && idx > 0) { var tmpUp = col.subtitles[idx - 1]; col.subtitles[idx - 1] = col.subtitles[idx]; col.subtitles[idx] = tmpUp; refreshDisplay(); } else if (direction === 'down' && idx < col.subtitles.length - 1) { var tmpDown = col.subtitles[idx + 1]; col.subtitles[idx + 1] = col.subtitles[idx]; col.subtitles[idx] = tmpDown; refreshDisplay(); } }
+      function updateColumn(columnId, updates) { var col = findColumn(columnId); if (!col) return; Object.assign(col, updates || {}); refreshDisplay(); }
+      function updateSubtitle(columnId, subtitleId, updates) { var sub = findSubtitle(columnId, subtitleId); if (!sub) return; Object.assign(sub, updates || {}); refreshDisplay(); }
+      function resolveHeadImage(titleBgPath) { if (!titleBgPath) return { headImage: 'none', headImageUrl: '' }; var bgPath = IMAGE_MAP[titleBgPath] || titleBgPath; if (HEAD_IMAGES.indexOf(bgPath) !== -1) return { headImage: bgPath, headImageUrl: '' }; return { headImage: 'other', headImageUrl: titleBgPath }; }
+      function parseContent(contentArr) { var subtitles = []; var blocks = Array.isArray(contentArr) ? contentArr : []; for (var i = 0; i < blocks.length; i++) { var block = String(blocks[i] == null ? '' : blocks[i]); if (block.indexOf('#image#') !== -1) { var idx = block.indexOf('#image#'); var textBefore = block.substring(0, idx); subtitles.push({ id: genId(), name: textBefore, content: '' }); } else { if (subtitles.length > 0 && subtitles[subtitles.length - 1].content === '') { subtitles[subtitles.length - 1].content = block; } else { subtitles.push({ id: genId(), name: '', content: block }); } } } return subtitles; }
+      function getOutputJSON() { var out = []; for (var i = 0; i < state.columns.length; i++) { var col = state.columns[i]; var item = {}; item.title = col.name; if (col.headImage === 'none') {} else if (col.headImage === 'other') { item.title_bg_path = col.headImageUrl || ''; } else { item.title_bg_path = col.headImage; } var content = []; for (var j = 0; j < col.subtitles.length; j++) { var sub = col.subtitles[j]; if (sub.name) { content.push(sub.name + '#image#子标题栏框_title_bg.png'); } if (sub.content) { content.push(sub.content); } } item.content = content; out.push(item); } return JSON.stringify(out, null, 2); }
+      function exportJSON() { var text = getOutputJSON(); var blob; try { blob = new Blob([text], { type: 'application/json;charset=utf-8' }); } catch (e) { return; } var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = 'notice.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function () { URL.revokeObjectURL(url); }, 200); }
+      function importJSON(file) { if (!file) return; var reader = new FileReader(); reader.onload = function (e) { try { var data = JSON.parse(e.target.result); if (!Array.isArray(data)) throw new Error('数据格式不正确:应为数组'); var newColumns = []; for (var i = 0; i < data.length; i++) { var item = data[i] || {}; var resolved = resolveHeadImage(item.title_bg_path); newColumns.push({ id: genId(), name: item.title || '', headImage: resolved.headImage, headImageUrl: resolved.headImageUrl, subtitles: parseContent(item.content) }); } state.columns = newColumns; for (var k = tabs.length - 1; k >= 0; k--) { if (tabs[k].type !== 'main') { closeTab(tabs[k].id); k = tabs.length; } } switchTab('main'); refreshDisplay(); } catch (err) { showToast('导入失败:' + err.message); } }; reader.readAsText(file); }
+      function refreshDisplay() { for (var i = 0; i < tabs.length; i++) { var t = tabs[i]; if (t.type === 'column' && t.dataId) { var col = findColumn(t.dataId); if (col) t.title = '栏目-' + col.name; } else if (t.type === 'subtitle' && t.dataId) { var foundCol = findSubtitleColumn(t.dataId); if (foundCol) { var sub = findSubtitle(foundCol.id, t.dataId); if (sub) t.title = '内容-' + sub.name; } } } var jsonArea = $('editor-json-output'); if (jsonArea) jsonArea.textContent = getOutputJSON(); if (pages.main.refresh) pages.main.refresh(); if (pages.column.refresh) { for (var j = 0; j < tabs.length; j++) { if (tabs[j].type === 'column') pages.column.refresh(tabs[j].containerEl, tabs[j].dataId); } } updateTabBar(); updateDocumentTitle(); }
+      function setupLayout() { window.addEventListener('resize', function () { if (resizeTimer) clearTimeout(resizeTimer); resizeTimer = setTimeout(function () {}, 150); }); }
+      function init() { var contentEl = $('editor-content'); if (!contentEl) return; var mainContainer = document.createElement('div'); mainContainer.className = 'editor-page active'; mainContainer.id = 'editor-page-main'; contentEl.appendChild(mainContainer); var mainTab = { id: 'main', type: 'main', title: '创建器', dataId: null, containerEl: mainContainer }; tabs.push(mainTab); activeTabId = 'main'; if (pages.main.render) pages.main.render(mainContainer); var bar = $('editor-tabbar'); if (bar) { bar.addEventListener('click', function (e) { var target = e.target; var tabEl = null; while (target && target !== bar) { if (target.classList && target.classList.contains('editor-tab')) { tabEl = target; break; } target = target.parentNode; } if (!tabEl) return; var tabId = tabEl.getAttribute('data-tab-id'); if (!tabId) return; if (e.target.classList && e.target.classList.contains('editor-tab-close')) { if (e.stopPropagation) e.stopPropagation(); closeTab(tabId); } else { switchTab(tabId); } }); } updateTabBar(); setupLayout(); updateDocumentTitle(); }
+      global.EditorApp = { state: state, HEAD_IMAGES: HEAD_IMAGES, pages: pages, init: init, openTab: openTab, closeTab: closeTab, switchTab: switchTab, getTabByTypeAndData: getTabByTypeAndData, updateTabBar: updateTabBar, updateTabTitle: updateTabTitle, updateDocumentTitle: updateDocumentTitle, addColumn: addColumn, removeColumn: removeColumn, moveColumn: moveColumn, addSubtitle: addSubtitle, removeSubtitle: removeSubtitle, moveSubtitle: moveSubtitle, updateColumn: updateColumn, updateSubtitle: updateSubtitle, findColumn: findColumn, findSubtitle: findSubtitle, findSubtitleColumn: findSubtitleColumn, getOutputJSON: getOutputJSON, exportJSON: exportJSON, importJSON: importJSON, refreshDisplay: refreshDisplay, setupLayout: setupLayout, genId: genId, showToast: showToast, escapeHtml: escapeHtml };
+    })(window);
+
+    // ==================== 4. 主界面 ====================
+    (function (global) {
+      'use strict';
+      var EditorApp = global.EditorApp;
+      var selectedColumnId = null;
+      function $(id) { return document.getElementById(id); }
+      function createEl(tag, className, text) { var node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; }
+      
+      function renderColumnList() { 
+        var listEl = $('main-column-list'); if (!listEl) return; listEl.textContent = ''; 
+        var columns = (EditorApp.state && EditorApp.state.columns) || []; 
+        if (columns.length === 0) { var hint = createEl('div', 'main-empty-hint', '暂无栏目，点击上方按钮创建'); listEl.appendChild(hint); return; } 
+        var stillExists = false; 
+        for (var c = 0; c < columns.length; c++) { if (columns[c].id === selectedColumnId) { stillExists = true; break; } } 
+        if (!stillExists) selectedColumnId = null; 
+        for (var i = 0; i < columns.length; i++) { 
+          var col = columns[i]; 
+          var item = createEl('div', 'editor-list-item'); 
+          if (col.id === selectedColumnId) item.className += ' selected'; 
+          item.setAttribute('data-column-id', col.id); 
+          var info = createEl('div', 'editor-list-item-info'); 
+          var nameEl = createEl('div', 'editor-list-item-name'); 
+          nameEl.innerHTML = EditorApp.escapeHtml(col.name); 
+          var meta = createEl('div', 'editor-list-item-meta', col.subtitles.length + '个子标题'); 
+          info.appendChild(nameEl); info.appendChild(meta); item.appendChild(info); 
+          (function (columnId) { item.addEventListener('click', function () { selectedColumnId = columnId; renderColumnList(); updateButtonStates(); }); })(col.id); 
+          listEl.appendChild(item); 
+        } 
+      }
+      
+      function updateButtonStates() { 
+        var removeBtn = $('main-remove-column'); var enterBtn = $('main-enter-column'); var upBtn = $('main-move-up'); var downBtn = $('main-move-down'); 
+        var columns = (EditorApp.state && EditorApp.state.columns) || []; var hasSelection = false; var selIdx = -1; 
+        for (var i = 0; i < columns.length; i++) { if (columns[i].id === selectedColumnId) { hasSelection = true; selIdx = i; break; } } 
+        if (removeBtn) removeBtn.disabled = !hasSelection; 
+        if (enterBtn) enterBtn.disabled = !hasSelection; 
+        if (upBtn) upBtn.disabled = !hasSelection || selIdx <= 0; 
+        if (downBtn) downBtn.disabled = !hasSelection || selIdx === -1 || selIdx >= columns.length - 1; 
+      }
+      
+      function render(container) {
+        if (!container) return; container.textContent = '';
+        var split = createEl('div', 'editor-layout-split'); 
+        var editArea = createEl('div', 'main-edit-area'); 
+        
+        var btnGroup = createEl('div', 'editor-btn-group'); 
+        var addTitleBtn = createEl('button', 'editor-btn btn-add-title', '添加大标题'); addTitleBtn.id = 'btn-add-title'; addTitleBtn.style.background = '#FF9500'; addTitleBtn.style.color = '#FFF';
+        var addColBtn = createEl('button', 'editor-btn btn-add-col', '添加栏目'); addColBtn.id = 'btn-add-col'; addColBtn.style.background = '#34C759'; addColBtn.style.color = '#FFF';
+        var fetchBtn = createEl('button', 'editor-btn btn-fetch', '拉取官方'); fetchBtn.id = 'btn-fetch'; fetchBtn.style.background = '#AF52DE'; fetchBtn.style.color = '#FFF';
+        
+        var exportBtn = createEl('button', 'editor-btn', '导出'); exportBtn.id = 'main-export';
+        var importBtn = createEl('button', 'editor-btn', '导入'); importBtn.id = 'main-import';
+        var previewBtn = createEl('button', 'editor-btn editor-btn-primary', '预览'); previewBtn.id = 'main-preview';
+        var importInput = document.createElement('input'); importInput.type = 'file'; importInput.id = 'main-import-input'; importInput.setAttribute('accept', '.json'); importInput.style.display = 'none';
+        
+        btnGroup.appendChild(addTitleBtn); btnGroup.appendChild(addColBtn); btnGroup.appendChild(fetchBtn);
+        btnGroup.appendChild(exportBtn); btnGroup.appendChild(importBtn); btnGroup.appendChild(previewBtn); btnGroup.appendChild(importInput);
+        
+        var btnGroup2 = createEl('div', 'editor-btn-row');
+        var enterBtn = createEl('button', 'editor-btn', '进入'); enterBtn.id = 'main-enter-column'; enterBtn.style.background = '#007AFF'; enterBtn.style.color = '#FFF';
+        var removeBtn = createEl('button', 'editor-btn', '删除'); removeBtn.id = 'main-remove-column'; removeBtn.style.background = '#FF3B30'; removeBtn.style.color = '#FFF';
+        var upBtn = createEl('button', 'editor-btn', '上移'); upBtn.id = 'main-move-up';
+        var downBtn = createEl('button', 'editor-btn', '下移'); downBtn.id = 'main-move-down';
+        btnGroup2.appendChild(enterBtn); btnGroup2.appendChild(removeBtn); btnGroup2.appendChild(upBtn); btnGroup2.appendChild(downBtn);
+
+        var listTitle = createEl('div', 'editor-section-title', '栏目列表'); var columnList = createEl('div', 'main-column-list'); columnList.id = 'main-column-list';
+        editArea.appendChild(btnGroup); editArea.appendChild(btnGroup2); editArea.appendChild(listTitle); editArea.appendChild(columnList);
+        
+        var outputArea = createEl('div', 'main-output-area'); var outputTitle = createEl('div', 'editor-section-title main-output-title', 'JSON 输出'); 
+        var jsonPre = document.createElement('pre'); jsonPre.id = 'editor-json-output';
+        
+        outputArea.appendChild(outputTitle); outputArea.appendChild(jsonPre);
+        split.appendChild(editArea); split.appendChild(outputArea); container.appendChild(split);
+        
+        addTitleBtn.addEventListener('click', function() { if (!EditorApp.state || !EditorApp.state.columns) return; if (EditorApp.state.columns.length > 0 && EditorApp.state.columns[0].name) return myAlert('公告大标题只能有一个！'); myPrompt('请输入大标题文字：', '').then(function(text) { if (text && text.trim() !== '') { EditorApp.state.columns.unshift({ id: 'title_' + Date.now(), name: text.trim(), headImage: 'none', headImageUrl: '', subtitles: [] }); EditorApp.pages.main.refresh(); } }); });
+        addColBtn.addEventListener('click', function () { var id = EditorApp.addColumn(); if (id) { selectedColumnId = id; renderColumnList(); updateButtonStates(); } });
+        removeBtn.addEventListener('click', function () { if (!selectedColumnId) { EditorApp.showToast('请先选择要删除的栏目'); return; } EditorApp.removeColumn(selectedColumnId); selectedColumnId = null; });
+        enterBtn.addEventListener('click', function () { if (selectedColumnId) EditorApp.openTab('column', selectedColumnId); });
+        upBtn.addEventListener('click', function () { if (selectedColumnId) EditorApp.moveColumn(selectedColumnId, 'up'); });
+        downBtn.addEventListener('click', function () { if (selectedColumnId) EditorApp.moveColumn(selectedColumnId, 'down'); });
+        exportBtn.addEventListener('click', function () { EditorApp.exportJSON(); });
+        importBtn.addEventListener('click', function () { importInput.click(); });
+        importInput.addEventListener('change', function () { var file = (importInput.files && importInput.files.length > 0) ? importInput.files[0] : null; if (file) EditorApp.importJSON(file); importInput.value = ''; });
+        
+        fetchBtn.addEventListener('click', function () {
+          fetchBtn.disabled = true; fetchBtn.textContent = '拉取中...';
+          fetch('https://u5.update.netease.com/game_notice/android.txt').then(function (res) { return res.text(); }).then(function (text) {
+            var rawData = JSON.parse(text), newCols = [], mainTitle = (rawData[0] && rawData[0].title) ? rawData[0].title : '官方最新公告', preTexts = (rawData[0] && rawData[0].content) ? rawData[0].content : [];
+            newCols.push({ id: 'title_' + Date.now(), name: mainTitle, headImage: 'none', headImageUrl: '', subtitles: [] });
+            for (var i = 1; i < rawData.length; i++) {
+              var item = rawData[i], subs = [], cArr = item.content || [], currentSub = null;
+              if (i === 1 && preTexts.length > 0) { currentSub = { id: 'sub_pre_' + Date.now(), name: '', content: '' }; for(var p=0; p<preTexts.length; p++) { if (typeof preTexts[p] === 'string') { var preStr = cleanText(preTexts[p]).replace(/#image#[^\s]*/g, ''); currentSub.content = currentSub.content ? currentSub.content + '\n' + preStr : preStr; } } subs.push(currentSub); }
+              for (var j = 0; j < cArr.length; j++) { var el = cArr[j]; if (Array.isArray(el)) { for (var k = 0; k < el.length; k += 2) { var subTitle = cleanText(el[k] || '').replace(/#image#[^\s]*/g, '').trim(), subBody = cleanText(el[k + 1] || ''); if (subTitle || subBody) { currentSub = { id: 'sub_' + i + '_' + j + '_' + k, name: subTitle, content: subBody }; subs.push(currentSub); } } } else if (typeof el === 'string') { if (el.indexOf('#image#') !== -1) { var subTitle = cleanText(el).replace(/#image#[^\s]*/g, '').trim(); currentSub = { id: 'sub_' + i + '_' + j, name: subTitle, content: '' }; subs.push(currentSub); } else { var cleanEl = cleanText(el); if (!currentSub) { currentSub = { id: 'sub_' + i + '_' + j, name: '', content: '' }; subs.push(currentSub); } currentSub.content = currentSub.content ? currentSub.content + '\n' + cleanEl : cleanEl; } } }
+              newCols.push({ id: 'col_' + i + '_' + Date.now(), name: item.title || '新栏目', headImage: getImgName(item.title_bg_path), headImageUrl: '', subtitles: subs });
+            }
+            if (window.EditorApp && EditorApp.state) { EditorApp.state.columns = newCols; EditorApp.pages.main.refresh(); } fetchBtn.textContent = '拉取官方'; fetchBtn.disabled = false;
+          }).catch(function (err) { fetchBtn.textContent = '拉取官方'; fetchBtn.disabled = false; myAlert("拉取失败：" + err.message); });
+        });
+        function getImgName(path) { if (!path) return '蓝粉黄底_pic.png'; var match = path.match(/([^\/]+\.(?:png|jpg|jpeg|gif|webp))/i); return match ? match[1] : '蓝粉黄底_pic.png'; }
+        function cleanText(text) { if (typeof text !== 'string') return ''; return text.replace(/</g, '【').replace(/>/g, '】'); }
+
+        renderColumnList(); updateButtonStates(); var jsonArea = $('editor-json-output'); if (jsonArea) jsonArea.textContent = EditorApp.getOutputJSON();
+      }
+      function refresh() { renderColumnList(); updateButtonStates(); }
+      if (EditorApp && EditorApp.pages && EditorApp.pages.main) { EditorApp.pages.main.render = render; EditorApp.pages.main.refresh = refresh; }
+    })(window);
+
+    // ==================== 5. 栏目编辑 ====================
+    (function (global) {
+      'use strict';
+      var EditorApp = global.EditorApp; var RichText = global.RichText; var HEAD_IMG_PREFIX = 'css/egnotice/';
+      function applyHeadImageState(col, urlRow, previewWrap, previewImg) { var headImage = col ? col.headImage : 'none'; if (headImage === 'other') { urlRow.classList.add('is-visible'); previewWrap.classList.remove('is-visible'); } else if (headImage === 'none' || !headImage) { urlRow.classList.remove('is-visible'); previewWrap.classList.remove('is-visible'); } else { urlRow.classList.remove('is-visible'); previewWrap.classList.add('is-visible'); previewImg.src = window._egAssetUrl ? window._egAssetUrl(headImage) : HEAD_IMG_PREFIX + headImage; } }
+      function getSelectedSubId(container) { return container.getAttribute('data-selected-sub-id') || null; }
+      function setSelectedSubId(container, subId) { if (subId) container.setAttribute('data-selected-sub-id', subId); else container.removeAttribute('data-selected-sub-id'); }
+      function updateSubtitleBtnStates(container, columnId) { var col = EditorApp.findColumn(columnId); var subs = (col && col.subtitles) ? col.subtitles : []; var selId = getSelectedSubId(container); var selIdx = -1; for (var i = 0; i < subs.length; i++) { if (subs[i].id === selId) { selIdx = i; break; } } var hasSel = selIdx !== -1; var enterBtn = container.querySelector('.column-enter-subtitle'); var upBtn = container.querySelector('.column-sub-up'); var downBtn = container.querySelector('.column-sub-down'); var removeBtn = container.querySelector('.column-remove-subtitle'); if (enterBtn) enterBtn.disabled = !hasSel; if (upBtn) upBtn.disabled = !hasSel || selIdx <= 0; if (downBtn) downBtn.disabled = !hasSel || selIdx >= subs.length - 1; if (removeBtn) removeBtn.disabled = !hasSel; }
+      function renderSubtitleList(container, columnId) { var col = EditorApp.findColumn(columnId); var subList = container.querySelector('.column-subtitle-list'); if (!subList) return; subList.innerHTML = ''; var subs = (col && col.subtitles) ? col.subtitles : []; var selId = getSelectedSubId(container); var selExists = false; for (var s = 0; s < subs.length; s++) { if (subs[s].id === selId) { selExists = true; break; } } if (!selExists) { setSelectedSubId(container, null); selId = null; } if (subs.length === 0) { var hint = document.createElement('div'); hint.className = 'column-empty-hint'; hint.textContent = '暂无子标题，点击上方按钮创建'; subList.appendChild(hint); } else { for (var i = 0; i < subs.length; i++) { var sub = subs[i]; var item = document.createElement('div'); item.className = 'editor-list-item column-subtitle-item'; if (sub.id === selId) item.className += ' selected'; var info = document.createElement('div'); info.className = 'editor-list-item-info'; var nameEl = document.createElement('div'); nameEl.className = 'editor-list-item-name'; nameEl.textContent = sub.name || '（无标题）'; var metaEl = document.createElement('div'); metaEl.className = 'editor-list-item-meta'; metaEl.textContent = RichText.countNetChars(sub.content) + ' 字'; info.appendChild(nameEl); info.appendChild(metaEl); item.appendChild(info); (function (containerRef, subId) { item.addEventListener('click', function () { setSelectedSubId(containerRef, subId); renderSubtitleList(containerRef, columnId); updateSubtitleBtnStates(containerRef, columnId); }); })(container, sub.id); subList.appendChild(item); } } updateSubtitleBtnStates(container, columnId); }
+      
+      function render(container, columnId) {
+        var col = EditorApp.findColumn(columnId); if (!col) { container.textContent = '错误:找不到栏目'; return; }
+        container.innerHTML = ''; var pageEl = document.createElement('div'); pageEl.className = 'column-page';
+        
+        var settings = document.createElement('div'); settings.className = 'column-settings';
+        var settingsTitle = document.createElement('div'); settingsTitle.className = 'editor-section-title'; settingsTitle.textContent = '栏目设置'; settings.appendChild(settingsTitle);
+        var nameRow = document.createElement('div'); nameRow.className = 'editor-form-row'; var nameLabel = document.createElement('label'); nameLabel.textContent = '栏目名称'; var nameInput = document.createElement('input'); nameInput.type = 'text'; nameInput.className = 'editor-input column-name-input'; nameInput.value = col.name || ''; nameRow.appendChild(nameLabel); nameRow.appendChild(nameInput); settings.appendChild(nameRow);
+        
+        var headRow = document.createElement('div'); headRow.className = 'editor-form-row'; var headLabel = document.createElement('label'); headLabel.textContent = '标题头图'; var headSelect = document.createElement('select'); headSelect.className = 'editor-select column-head-image-select';
+        var noneOpt = document.createElement('option'); noneOpt.value = 'none'; noneOpt.textContent = '无头图'; headSelect.appendChild(noneOpt);
+        var imgs = EditorApp.HEAD_IMAGES || []; for (var i = 0; i < imgs.length; i++) { var opt = document.createElement('option'); opt.value = imgs[i]; opt.textContent = imgs[i]; headSelect.appendChild(opt); }
+        var otherOpt = document.createElement('option'); otherOpt.value = 'other'; otherOpt.textContent = '其他(自定义链接)'; headSelect.appendChild(otherOpt); headSelect.value = col.headImage || 'none';
+        headRow.appendChild(headLabel); headRow.appendChild(headSelect); settings.appendChild(headRow);
+        
+        var urlRow = document.createElement('div'); urlRow.className = 'editor-form-row column-head-url-row'; var urlLabel = document.createElement('label'); urlLabel.textContent = '头图 URL'; var urlInput = document.createElement('input'); urlInput.type = 'text'; urlInput.className = 'editor-input column-head-url-input'; urlInput.placeholder = '输入头图路径或URL'; urlInput.value = col.headImageUrl || ''; urlRow.appendChild(urlLabel); urlRow.appendChild(urlInput); settings.appendChild(urlRow);
+        var previewWrap = document.createElement('div'); previewWrap.className = 'column-head-preview'; var previewImg = document.createElement('img'); previewImg.className = 'column-head-preview-img'; previewImg.alt = '头图预览'; previewWrap.appendChild(previewImg); settings.appendChild(previewWrap);
+        applyHeadImageState(col, urlRow, previewWrap, previewImg);
+        
+        var taWrap = document.createElement('div'); taWrap.className = 'editor-form-row'; taWrap.innerHTML = '<label>栏目主内容（前言）</label>';
+        var ta = document.createElement('textarea'); ta.className = 'editor-input'; ta.style.minHeight = '80px';
+        var mainContent = ''; if (col.subtitles && col.subtitles.length > 0 && !col.subtitles[0].name) mainContent = col.subtitles[0].content;
+        ta.value = mainContent;
+        ta.addEventListener('input', function() { if (col.subtitles && col.subtitles.length > 0 && !col.subtitles[0].name) col.subtitles[0].content = ta.value; else col.subtitles.unshift({ id: EditorApp.genId(), name: '', content: ta.value }); EditorApp.updateColumn(columnId, {}); });
+        taWrap.appendChild(ta); settings.appendChild(taWrap);
+        pageEl.appendChild(settings);
+        
+        var subSection = document.createElement('div'); subSection.className = 'column-subtitle-section';
+        var btnGroup = document.createElement('div'); btnGroup.className = 'editor-btn-group';
+        var addBtn = document.createElement('button'); addBtn.type = 'button'; addBtn.className = 'editor-btn editor-btn-primary column-add-subtitle'; addBtn.textContent = '添加子标题'; 
+        var removeBtn = document.createElement('button'); removeBtn.type = 'button'; removeBtn.className = 'editor-btn editor-btn-danger column-remove-subtitle'; removeBtn.textContent = '删除';
+        btnGroup.appendChild(addBtn); btnGroup.appendChild(removeBtn); subSection.appendChild(btnGroup);
+        
+        var btnRow2 = document.createElement('div'); btnRow2.className = 'editor-btn-row';
+        var enterBtn = document.createElement('button'); enterBtn.type = 'button'; enterBtn.className = 'editor-btn column-enter-subtitle'; enterBtn.textContent = '进入'; enterBtn.style.background = '#007AFF'; enterBtn.style.color = '#FFF';
+        var subUpBtn = document.createElement('button'); subUpBtn.type = 'button'; subUpBtn.className = 'editor-btn column-sub-up'; subUpBtn.textContent = '上移';
+        var subDownBtn = document.createElement('button'); subDownBtn.type = 'button'; subDownBtn.className = 'editor-btn column-sub-down'; subDownBtn.textContent = '下移';
+        btnRow2.appendChild(enterBtn); btnRow2.appendChild(subUpBtn); btnRow2.appendChild(subDownBtn); subSection.appendChild(btnRow2);
+        
+        var subTitle = document.createElement('div'); subTitle.className = 'editor-section-title'; subTitle.textContent = '子标题列表'; subSection.appendChild(subTitle);
+        var subList = document.createElement('div'); subList.className = 'column-subtitle-list'; subSection.appendChild(subList);
+        pageEl.appendChild(subSection); container.appendChild(pageEl);
+        
+        nameInput.addEventListener('input', function () { EditorApp.updateColumn(columnId, { name: nameInput.value }); });
+        headSelect.addEventListener('change', function () { var val = headSelect.value; if (val === 'other') { urlRow.classList.add('is-visible'); previewWrap.classList.remove('is-visible'); EditorApp.updateColumn(columnId, { headImage: 'other' }); } else if (val === 'none') { urlRow.classList.remove('is-visible'); previewWrap.classList.remove('is-visible'); EditorApp.updateColumn(columnId, { headImage: 'none' }); } else { urlRow.classList.remove('is-visible'); previewWrap.classList.add('is-visible'); previewImg.src = window._egAssetUrl ? window._egAssetUrl(val) : HEAD_IMG_PREFIX + val; EditorApp.updateColumn(columnId, { headImage: val }); } });
+        urlInput.addEventListener('input', function () { EditorApp.updateColumn(columnId, { headImageUrl: urlInput.value }); });
+        addBtn.addEventListener('click', function () { var subId = EditorApp.addSubtitle(columnId); if (subId) { setSelectedSubId(container, subId); renderSubtitleList(container, columnId); updateSubtitleBtnStates(container, columnId); } });
+        removeBtn.addEventListener('click', function () { var selId = getSelectedSubId(container); if (!selId) return; EditorApp.removeSubtitle(columnId, selId); setSelectedSubId(container, null); });
+        enterBtn.addEventListener('click', function () { var selId = getSelectedSubId(container); if (selId) EditorApp.openTab('subtitle', selId); });
+        subUpBtn.addEventListener('click', function () { var selId = getSelectedSubId(container); if (selId) EditorApp.moveSubtitle(columnId, selId, 'up'); });
+        subDownBtn.addEventListener('click', function () { var selId = getSelectedSubId(container); if (selId) EditorApp.moveSubtitle(columnId, selId, 'down'); });
+        
+        setTimeout(function() {
+          var nativeSelect = settings.querySelector('.column-head-image-select');
+          if (nativeSelect && !nativeSelect.dataset.enhanced) {
+            nativeSelect.style.display = 'none'; nativeSelect.dataset.enhanced = 'true';
+            var fakeTrigger = document.createElement('div'); fakeTrigger.className = 'fake-select-trigger';
+            var currentVal = nativeSelect.value, displayVal = currentVal === 'none' ? '无头图' : (currentVal === 'other' ? '其他' : currentVal);
+            fakeTrigger.innerHTML = `<span>${displayVal}</span><i>▼</i>`; nativeSelect.parentNode.insertBefore(fakeTrigger, nativeSelect.nextSibling);
+            fakeTrigger.onclick = function() { showImageSelectModal(nativeSelect, fakeTrigger.querySelector('span')); };
+            nativeSelect.addEventListener('change', function() { var v = nativeSelect.value; fakeTrigger.querySelector('span').textContent = v === 'none' ? '无头图' : (v === 'other' ? '其他' : v); });
+          }
+        }, 0);
+        
+        renderSubtitleList(container, columnId);
+      }
+      function refresh(containerEl, columnId) { renderSubtitleList(containerEl, columnId); }
+      EditorApp.pages.column.render = render; EditorApp.pages.column.refresh = refresh;
+    })(window);
+
+    // ==================== 6. 子标题编辑 ====================
+    (function (global) {
+      'use strict';
+      var EditorApp = global.EditorApp; var RichText = global.RichText;
+      function buildCard(style) {
+        var card = document.createElement('div'); card.className = 'richtext-card'; card.setAttribute('data-style-id', style.id);
+        var top = document.createElement('div'); top.className = 'richtext-card-top'; var check = document.createElement('input'); check.type = 'checkbox'; check.className = 'richtext-card-check'; var name = document.createElement('span'); name.className = 'richtext-card-name'; name.textContent = style.name; top.appendChild(check); top.appendChild(name); card.appendChild(top);
+        var params = document.createElement('div'); params.className = 'richtext-card-params'; var paramText = (style.params && style.params.length) ? style.params.map(function (p) { return p.name; }).join(' · ') : '无参数'; params.textContent = paramText; card.appendChild(params);
+        var area = document.createElement('div'); area.className = 'richtext-card-param-area';
+        if (style.params && style.params.length) { for (var i = 0; i < style.params.length; i++) { var p = style.params[i]; var group = document.createElement('div'); group.className = 'richtext-param-group'; var label = document.createElement('label'); label.textContent = p.name; var input = document.createElement('input'); input.type = (p.type === 'color') ? 'color' : 'text'; input.setAttribute('data-param', p.name); input.setAttribute('placeholder', '输入' + p.name); if (p.type === 'number') { (function (inp) { inp.addEventListener('input', function () { inp.value = inp.value.replace(/[^0-9.,]/g, ''); }); })(input); } group.appendChild(label); group.appendChild(input); area.appendChild(group); } }
+        card.appendChild(area); return card;
+      }
+      function render(container, columnId, subtitleId) {
+        container.textContent = ''; var page = document.createElement('div'); page.className = 'subtitle-page';
+        var sideCol = document.createElement('div'); sideCol.className = 'subtitle-side-col';
+        var nameSection = document.createElement('div'); nameSection.className = 'subtitle-name-section'; var nameRow = document.createElement('div'); nameRow.className = 'editor-form-row'; var nameLabel = document.createElement('label'); nameLabel.textContent = '子标题名称'; var nameInput = document.createElement('input'); nameInput.type = 'text'; nameInput.className = 'editor-input subtitle-name-input'; nameRow.appendChild(nameLabel); nameRow.appendChild(nameInput); nameSection.appendChild(nameRow); sideCol.appendChild(nameSection);
+        
+        var rtSection = document.createElement('div'); rtSection.className = 'subtitle-richtext-section'; var rtTitle = document.createElement('div'); rtTitle.className = 'editor-section-title'; rtTitle.textContent = '快捷富文本'; var grid = document.createElement('div'); grid.className = 'richtext-grid'; var rtActions = document.createElement('div'); rtActions.className = 'editor-btn-group'; rtActions.style.marginTop = '12px'; var insertBtn = document.createElement('button'); insertBtn.className = 'editor-btn editor-btn-primary richtext-insert-btn'; insertBtn.textContent = '生成插入'; rtActions.appendChild(insertBtn); rtSection.appendChild(rtTitle); rtSection.appendChild(grid); rtSection.appendChild(rtActions); sideCol.appendChild(rtSection); page.appendChild(sideCol);
+        
+        var mainCol = document.createElement('div'); mainCol.className = 'subtitle-main-col';
+        var editorSection = document.createElement('div'); editorSection.className = 'subtitle-editor-section'; var editorTitle = document.createElement('div'); editorTitle.className = 'editor-section-title'; editorTitle.textContent = '正文编辑'; var textarea = document.createElement('textarea'); textarea.className = 'subtitle-textarea'; textarea.setAttribute('placeholder', '输入正文内容...'); var btnGroup = document.createElement('div'); btnGroup.className = 'editor-btn-group'; btnGroup.style.marginTop = '16px'; var saveBtn = document.createElement('button'); saveBtn.className = 'editor-btn editor-btn-primary subtitle-save-btn'; saveBtn.textContent = '保存'; var clearBtn = document.createElement('button'); clearBtn.className = 'editor-btn subtitle-clear-btn'; clearBtn.textContent = '清空'; btnGroup.appendChild(saveBtn); btnGroup.appendChild(clearBtn); var hint = document.createElement('div'); hint.className = 'subtitle-save-hint'; hint.textContent = '点击「保存」后生效'; hint.style.cssText = 'font-size:12px; color:#8E8E93; margin-top:8px; text-align:center;'; editorSection.appendChild(editorTitle); editorSection.appendChild(textarea); editorSection.appendChild(btnGroup); editorSection.appendChild(hint); mainCol.appendChild(editorSection); page.appendChild(mainCol); container.appendChild(page);
+        
+        var sub = EditorApp.findSubtitle(columnId, subtitleId);
+        if (!sub) { container.textContent = ''; var err = document.createElement('div'); err.className = 'main-split'; err.style.color = '#FF3B30'; err.style.textAlign = 'center'; err.style.paddingTop = '50px'; err.textContent = '未找到该子标题。'; container.appendChild(err); return; }
+        nameInput.value = sub.name || ''; textarea.value = sub.content || '';
+        var styles = RichText.STYLES; var cardEls = {}; var cardChecks = {};
+        for (var i = 0; i < styles.length; i++) { var card = buildCard(styles[i]); grid.appendChild(card); cardEls[styles[i].id] = card; cardChecks[styles[i].id] = card.querySelector('.richtext-card-check'); }
+        var checkedIds = {}; checkedIds['color'] = true;
+        function updateCardStates() { var hasImage = !!checkedIds['image']; var hasEnd = !!checkedIds['end']; var hasOther = false; for (var k in checkedIds) { if (k !== 'image' && k !== 'end' && checkedIds[k]) { hasOther = true; break; } } for (var id in cardEls) { var cardEl = cardEls[id]; var isChecked = !!checkedIds[id]; if (isChecked) cardEl.classList.add('checked'); else cardEl.classList.remove('checked'); cardChecks[id].checked = isChecked; var disabled = false; if (hasImage && id !== 'image') disabled = true; else if (hasEnd && id !== 'end') disabled = true; else if (hasOther && (id === 'image' || id === 'end')) disabled = true; if (disabled) cardEl.classList.add('disabled'); else cardEl.classList.remove('disabled'); } }
+        function selectStyle(id, checked) { if (checked) { if (id === 'image') { for (var k in checkedIds) delete checkedIds[k]; checkedIds['image'] = true; } else if (id === 'end') { for (var k2 in checkedIds) delete checkedIds[k2]; checkedIds['end'] = true; } else { delete checkedIds['image']; delete checkedIds['end']; checkedIds[id] = true; } } else delete checkedIds[id]; updateCardStates(); }
+        grid.addEventListener('click', function (e) { var target = e.target; var cardEl = null; while (target && target !== grid) { if (target.classList && target.classList.contains('richtext-card')) { cardEl = target; break; } target = target.parentNode; } if (!cardEl) return; var sid = cardEl.getAttribute('data-style-id'); if (!sid) return; if (cardEl.classList.contains('disabled')) return; if (e.target.classList && e.target.classList.contains('richtext-card-check')) return; if (e.target.tagName === 'INPUT') return; var nowChecked = !checkedIds[sid]; selectStyle(sid, nowChecked); });
+        grid.addEventListener('change', function (e) { var target = e.target; if (!target.classList || !target.classList.contains('richtext-card-check')) return; var cardEl = null; var node = target.parentNode; while (node && node !== grid) { if (node.classList && node.classList.contains('richtext-card')) { cardEl = node; break; } node = node.parentNode; } if (!cardEl) return; var sid = cardEl.getAttribute('data-style-id'); if (!sid) return; if (cardEl.classList.contains('disabled')) { target.checked = !!checkedIds[sid]; return; } selectStyle(sid, target.checked); });
+        updateCardStates();
+        nameInput.addEventListener('input', function () { EditorApp.updateSubtitle(columnId, subtitleId, { name: this.value }); });
+        saveBtn.addEventListener('click', function () { EditorApp.updateSubtitle(columnId, subtitleId, { content: textarea.value }); EditorApp.showToast('已保存'); });
+        clearBtn.addEventListener('click', function () { textarea.value = ''; });
+        insertBtn.addEventListener('click', function () { var selectedIds = []; for (var k in checkedIds) { if (checkedIds[k]) selectedIds.push(k); } if (!selectedIds.length) { EditorApp.showToast('请至少选择一个样式'); return; } var paramValues = {}; for (var idx = 0; idx < selectedIds.length; idx++) { var sid = selectedIds[idx]; var cardEl = cardEls[sid]; var inputs = cardEl.querySelectorAll('input[data-param]'); var vals = {}; for (var j = 0; j < inputs.length; j++) { var pname = inputs[j].getAttribute('data-param'); vals[pname] = inputs[j].value; } paramValues[sid] = vals; } var generated = RichText.generate(selectedIds, paramValues); if (!generated) return; var start = textarea.selectionStart; var end = textarea.selectionEnd; textarea.value = textarea.value.substring(0, start) + generated + textarea.value.substring(end); textarea.focus(); var phText = ''; var phIdx = -1; if (generated.indexOf('链接url') !== -1) { phText = '链接url'; phIdx = generated.indexOf('链接url'); } else if (generated.indexOf('文字') !== -1) { phText = '文字'; phIdx = generated.indexOf('文字'); } if (phIdx !== -1) { textarea.selectionStart = start + phIdx; textarea.selectionEnd = start + phIdx + phText.length; } else { textarea.selectionStart = textarea.selectionEnd = start + generated.length; } EditorApp.showToast('已插入'); });
+      }
+      if (EditorApp && EditorApp.pages && EditorApp.pages.subtitle) EditorApp.pages.subtitle.render = render;
+    })(window);
+
+    // ==================== 7. 公用函数 ====================
+    window.myPrompt = function(title, defaultValue = '') {
+      return new Promise((resolve) => {
+        var mask = document.getElementById('my-modal-mask'), titleEl = document.getElementById('my-modal-title'), inputEl = document.getElementById('my-modal-input'), btnCancel = document.getElementById('my-modal-cancel'), btnConfirm = document.getElementById('my-modal-confirm');
+        titleEl.textContent = title; inputEl.style.display = 'block'; inputEl.value = defaultValue;
+        requestAnimationFrame(() => { mask.classList.add('show'); });
+        var newBtnCancel = btnCancel.cloneNode(true), newBtnConfirm = btnConfirm.cloneNode(true);
+        btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel); btnConfirm.parentNode.replaceChild(newBtnConfirm, btnConfirm);
+        newBtnCancel.onclick = function() { mask.classList.remove('show'); setTimeout(() => resolve(null), 250); };
+        newBtnConfirm.onclick = function() { mask.classList.remove('show'); setTimeout(() => resolve(inputEl.value), 250); };
+      });
+    };
+
+    window.myAlert = function(msg) {
+      return new Promise((resolve) => {
+        var mask = document.getElementById('my-modal-mask'), titleEl = document.getElementById('my-modal-title'), inputEl = document.getElementById('my-modal-input'), btnCancel = document.getElementById('my-modal-cancel'), btnConfirm = document.getElementById('my-modal-confirm');
+        titleEl.textContent = msg; inputEl.style.display = 'none'; btnCancel.style.display = 'none';
+        requestAnimationFrame(() => { mask.classList.add('show'); });
+        var newBtnConfirm = btnConfirm.cloneNode(true); btnConfirm.parentNode.replaceChild(newBtnConfirm, btnConfirm);
+        newBtnConfirm.onclick = function() { mask.classList.remove('show'); setTimeout(() => { btnCancel.style.display = 'block'; resolve(); }, 250); };
+      });
+    };
+
+    function showImageSelectModal(nativeSelect, triggerSpan) {
+      var mask = document.getElementById('img-select-mask'), container = document.getElementById('custom-img-list-container'); container.innerHTML = '';
+      var images = EditorApp.HEAD_IMAGES || [], allOptions = ['none', 'other'].concat(images);
+      allOptions.forEach(imgName => {
+        var div = document.createElement('div'); div.className = 'custom-img-item';
+        if (nativeSelect.value === imgName) div.classList.add('active');
+        if (imgName === 'none') { div.innerHTML = `<span style="font-weight:bold; padding: 15px 0; display:block;">无头图</span>`; }
+        else if (imgName === 'other') { div.innerHTML = `<span style="font-weight:bold; padding: 15px 0; display:block;">自定义链接</span>`; }
+        else { 
+          var realUrl = window._egAssetUrl ? window._egAssetUrl(imgName) : 'css/egnotice/' + imgName;
+          div.innerHTML = `<img src="${realUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.color='red'; this.nextElementSibling.textContent='读取失败'" onload="this.nextElementSibling.style.color='#333'"><span>${imgName}</span>`; 
+        }
+        div.onclick = function() { nativeSelect.value = imgName; nativeSelect.dispatchEvent(new Event('change')); triggerSpan.textContent = imgName === 'none' ? '无头图' : (imgName === 'other' ? '其他' : imgName); mask.classList.remove('show'); };
+        container.appendChild(div);
+      });
+      requestAnimationFrame(() => { mask.classList.add('show'); });
+    }
+
+    // ==================== 8. 初始化 ====================
+    document.addEventListener('DOMContentLoaded', function () {
+      if (!window.EditorApp) { document.body.innerHTML = '<h2 style="color:red;text-align:center;margin-top:50px;">依赖加载失败</h2>'; return; }
+      EditorApp.init();
+      // 启动循环轮询，用于替换 JSON 框为可编辑 textarea
+      setInterval(function () {
+        var pre = document.getElementById('editor-json-output'), box = document.getElementById('custom-json-box');
+        if (pre && !box) {
+          pre.style.display = 'none'; var customTa = document.createElement('textarea'); customTa.id = 'custom-json-box'; customTa.className = 'custom-json-box'; customTa.spellcheck = false; customTa.value = EditorApp.getOutputJSON(); pre.parentNode.insertBefore(customTa, pre.nextSibling);
+          var debounceTimer; customTa.addEventListener('input', function () { clearTimeout(debounceTimer); debounceTimer = setTimeout(function() { try { var data = JSON.parse(customTa.value); if (Array.isArray(data) && data.length > 0) { EditorApp.state.columns = data.map(function(item, idx) { var isTitle = !item.content || (Array.isArray(item.content) && item.content.length === 0), subs = []; if (!isTitle) { var blocks = Array.isArray(item.content) ? item.content : [], currentSub = null; for (var i = 0; i < blocks.length; i++) { var block = String(blocks[i] == null ? '' : blocks[i]); if (block.indexOf('#image#') !== -1) { var name = block.split('#image#')[0]; currentSub = { id: 'sub_' + i, name: name, content: '' }; subs.push(currentSub); } else { if (!currentSub) { currentSub = { id: 'sub_' + i, name: '', content: '' }; subs.push(currentSub); } currentSub.content = currentSub.content ? currentSub.content + '\n' + block : block; } } } return { id: 'col_' + idx + '_' + Date.now(), name: item.title || '', headImage: item.title_bg_path || 'none', headImageUrl: item.title_bg_path || '', subtitles: subs }; }); EditorApp.pages.main.refresh(); } } catch(e) {} }, 800); });
+        }
+        if (box && document.activeElement !== box) { var fresh = EditorApp.getOutputJSON(); if (fresh && box.value !== fresh) box.value = fresh; }
+      }, 100);
+
+      // 拦截预览
+      document.addEventListener('click', function(e) {
+        var btn = e.target.closest('button');
+        if (btn && (btn.id === 'main-preview' || btn.textContent.includes('预览'))) {
+          e.stopPropagation(); e.preventDefault(); var box = document.getElementById('custom-json-box'), jsonText = box ? box.value : EditorApp.getOutputJSON(), renderData;
+          try { renderData = JSON.parse(jsonText); } catch(err) { return myAlert("JSON 格式错误"); }
+          if (renderData.length === 0) return myAlert("无数据存在"); var mainTitle = "公告预览", finalData = [];
+          if (renderData.length > 0 && !renderData[0].title_bg_path) { mainTitle = renderData[0].title; finalData = renderData.slice(1); } else { finalData = renderData; }
+          if (finalData.length === 0) finalData.push({ "title": " ", "content": [" "] });
+          EgNotice.render(finalData, { assetsBase: 'css/egnotice/', mainTitle: mainTitle }); return;
+        }
+      }, true);
+    });
+  </script>
+</body>
+</html>
