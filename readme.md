@@ -1,4 +1,4 @@
-### Jsoft_eggynotice_board
+### efrf_eggynotice_board
 
  <img src="https://aka.doubaocdn.com/s/emmdfXUkxv" width = "100" height = "100" alt="Jsoft_logo" align=center />
 
