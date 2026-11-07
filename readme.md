@@ -1,8 +1,8 @@
-###efrf_eggynotice_board (美国国家图片)
+### efrf_eggynotice_board
 
- <IMGsrc="https://aka.doubaocdn.com/s/emmdfXUkxv" 宽度 = "100" 高度 = "100" alt="Jsoft_logo" 对齐=中心 />
+ <img src="https://aka.doubaocdn.com/s/emmdfXUkxv" width = "100" height = "100" alt="Jsoft_logo" align=center />
 
-######©2024-2026 efrf
+###### ©2024-2026 efrf
 
 > 原项目：Jsoft_eggynotice_board　原作者：kamcdev（Jsoft Studio）
 > 原仓库：https://github.com/kamcdev/Jsoft_eggynotice_board
@@ -10,11 +10,11 @@
 
 ------
 
-<IMGsrc="https://img.shields.io/badge/HTML-5-orange">
+<img src="https://img.shields.io/badge/HTML-5-orange">
 
-<IMGsrc="https://img.shields.io/badge/CSS-3-blue">
+<img src="https://img.shields.io/badge/CSS-3-blue">
 
-<IMGsrc="https://img.shields.io/badge/JavaScript-ES5-yellow">
+<img src="https://img.shields.io/badge/JavaScript-ES5-yellow">
 
 ------
 
@@ -26,7 +26,7 @@
     * [集成到你的页面](#集成到你的页面)
 * [文件结构](#文件结构)
 * [数据格式](#数据格式)
-* [api参考](#api参考)
+* [API参考](#api参考)
 * [结语](#结语)
 
 <p id="介绍"></p>
@@ -57,11 +57,11 @@
 
 所有代码已合并进同一个 HTML 文件，**直接用浏览器打开即可**，不需要再起静态服务器
 
-需要注意：公告板图片资源仍在 `美国` 目录内，请保持该目录与 HTML 同级，不要移动或删除，否则公告内的图标、标题背景图会显示不出来
+需要注意：公告板图片资源仍在 `css/egnotice/` 目录内，请保持该目录与 HTML 同级，不要移动或删除，否则公告内的图标、标题背景图会显示不出来
 
-如果用 `文件：//` 协议打开时公告数据走 `fetch` 读取本地 JSON，部分浏览器会拦截本地请求，此时把数据直接写进 HTML 内传入 `时间表:`，或改用在线 JSON 地址即可
+如果用 `file://` 协议打开时公告数据走 `fetch` 读取本地 JSON，部分浏览器会拦截本地请求，此时把数据直接写进 HTML 内传入 `EgNotice.render(data)`，或改用在线 JSON 地址即可
 
-<pid="打开公告板"></p>
+<p id="打开公告板"></p>
 
 2.打开公告板
 
@@ -102,9 +102,9 @@ EgNoticeEgg.load().then(function (blobUrl) {
 
 ```
 项目根目录
-├── index.html          # 已内联全部 CSS 与 JS 的主文件
+├── index.html          # 已合并 CSS 与 JS 的主文件
 ├── css/
-│   └── egnotice/       # 公告板图片资源（图标、标题背景图等），必须保留
+│   └── egnotice/       # 公告板图片资源（图标、标题背景图等
 ├── appConfig.xlt
 └── appIcon.png
 ```
